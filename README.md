@@ -11,7 +11,7 @@ This library can connect to `SLK20R` and ZK series, including `ZK9500`, `ZK6500`
  
 ## Installation
 On linux and MacOS: A .NET (or Mono) runtime is required. Windows is equipped with one by default
-- You have to first install the ZKFinger SDK from the offical website [here](https://www.zkteco.com/en/Biometrics_Module_SDK/) 
+- You have to first install the ZKFinger SDK from the offical website [here](https://www.zkteco.com/en/Biometrics_Module_SDK) 
 - Then install this library:
     ```bash
     pip install pyzkfp
