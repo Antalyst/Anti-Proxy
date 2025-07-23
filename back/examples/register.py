@@ -4,7 +4,9 @@ from pyzkfp import ZKFP2
 from time import sleep
 from threading import Thread
 import pymysql
+from fastapi import FastAPI
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+app = FastAPI()
 
 
 class FingerprintScanner:
@@ -13,7 +15,7 @@ class FingerprintScanner:
         try:
             conn = pymysql.connect(**self.db_config, cursorclass=pymysql.cursors.DictCursor)
             with conn.cursor() as cursor:
-                cursor.execute("SELECT * FROM users")
+                cursor.execute("SELECT * FROM students")
                 results = cursor.fetchall()
                 if not results:
                     print('No users found in database.')
@@ -33,9 +35,13 @@ class FingerprintScanner:
                         continue
 
                     match_score = self.zkfp2.DBMatch(stored_template, scanned_template)
-                    print(f"Checking user {result['username']} with score {match_score}")
-                    if match_score > 0:
-                        print(f"User {result['username']} verified with score {match_score}")
+                    if match_score > 200:
+                        print(f"User verified with score {match_score}")
+                        print(f"student_name: {result['student_name']}")
+                        print(f"age: {result['age']}")
+                        print(f"address: {result['address']}")
+                        print(f"course_taken: {result['course_taken']}")
+                        print(f"birthdate: {result['birthdate']}")
                         self.zkfp2.Light('green')
                         return True
 
@@ -49,7 +55,7 @@ class FingerprintScanner:
         finally:
             if conn:
                 conn.close()
-
+    @app.post('/')
     def __init__(self):
         self.logger = logging.getLogger('fps')
         fh = logging.FileHandler('logs.log')
@@ -86,12 +92,18 @@ class FingerprintScanner:
         try:
             conn = pymysql.connect(**self.db_config)
             with conn.cursor() as cursor:
-                username = input('Username: ')
+                student_name = input('student_name: ')
+                age = input('age: ')
+                address = input('address: ')
+                examinee_no = input('examinee_no: ')
+                course_taken = input('course_taken: ')
+                date_registered = input('date_registered: ')
+                birthdate = input('birthdate: ')
                 sql = """
-                INSERT INTO users (username, fingerprint_template)
-                VALUES (%s, %s)
+                INSERT INTO students (student_name, age, address, examinee_no, course_taken, date_registered, birthdate, fingerprint_template)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """
-                cursor.execute(sql, (username, template_bytes))
+                cursor.execute(sql, (student_name, age, address, examinee_no, course_taken, date_registered, birthdate, template_bytes))
             conn.commit()
             self.logger.info('Fingerprint template saved to users table.')
         except Exception as e:
@@ -112,7 +124,7 @@ class FingerprintScanner:
     def capture_handler(self):
         try:
             tmp, img = self.capture
-            if self.mode == 'register':
+            if self.register:
                 fid, score = self.zkfp2.DBIdentify(tmp)
                 if fid:
                     self.logger.info(f"successfully identified the user: {fid}, Score: {score}")
@@ -142,7 +154,7 @@ class FingerprintScanner:
                         else:
                             self.zkfp2.Light('red', 1)
                             self.logger.warning("Different finger. Please enter the original finger!")
-            elif self.mode == 'verify':
+            else:
                 self.verify_user_from_db(tmp)
         except KeyboardInterrupt:
             self.logger.info("Shutting down...")
@@ -173,17 +185,24 @@ class FingerprintScanner:
             exit(0)
 
 
+
 if __name__ == "__main__":
-    print("Select mode:")
-    print("1. Register user")
-    print("2. Verify user")
-    mode = input("Enter 1 or 2: ").strip()
     fingerprint_scanner = FingerprintScanner()
-    if mode == '1':
-        fingerprint_scanner.mode = 'register'
-    elif mode == '2':
-        fingerprint_scanner.mode = 'verify'
-    else:
-        print("Invalid mode selected.")
-        exit(1)
-    fingerprint_scanner.listenToFingerprints()
+    print("Place your finger on the scanner...")
+    while True:
+        capture = fingerprint_scanner.zkfp2.AcquireFingerprint()
+        if capture:
+            tmp, img = capture
+            print("Checking fingerprint in database...")
+            found = fingerprint_scanner.verify_user_from_db(tmp)
+            if found:
+                print("Fingerprint verified!")
+            else:
+                print("Fingerprint not found. Proceeding to registration.")
+                try:
+                    fingerprint_scanner.capture = capture
+                    fingerprint_scanner.register = True
+                    fingerprint_scanner.capture_handler()
+                except Exception as e:
+                    print(f"Error during registration: {e}")
+            sleep(1)
